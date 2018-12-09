@@ -23,15 +23,13 @@ const md = require('markdown-it')({
     }
 });
 
-// TODO Mettre le site sur www au lieu de blog (ovh + github)
-// TODO Minification css
 // TODO Intégrer la date de rédaction de l'article dans le nom du fichier html, sans écraser si modification
 // TODO Faire en sorte que l'affichage des articles de la page d'accueil soit "sympa" = pas toujours les mêmes rectangles
 // TODO Resize automatique des images dans les différents formats voulus
-// TODO Optimisation des images pour réduire le poids
 // TODO Gérer des catégories d'articles. Avoir une page par catégorie qui liste les articles
 // TODO Audit SEO
 // TODO Afficher la date de dernière mise à jour de l'article dans le fichier html
+// TODO Mettre le site sur www au lieu de blog (ovh + github)
 // TODO Possibilité de voir le site en offline (webworker)
 // TODO PWA ?
 
