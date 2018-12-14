@@ -26,7 +26,7 @@ const md = require('markdown-it')({
 const utils = require("./build-tools/utils");
 const articless = utils.getArticlesList();
 
-// TODO Gérer des catégories d'articles. Avoir une page par catégorie qui liste les articles
+// TODO UTILE ? Gérer des catégories d'articles. Avoir une page par catégorie qui liste les articles
 // TODO Faire un fichier de config avec toutes les infos reprises un peu partout
 // TODO Intégrer la date de rédaction de l'article dans le nom du fichier html, sans écraser si modification
 // TODO Faire en sorte que l'affichage des articles de la page d'accueil soit "sympa" = pas toujours les mêmes rectangles
@@ -142,10 +142,22 @@ const populateHomePage = () => {
     });
 
     return gulp.src(path.join(__dirname, "src/templates/layout.html"))
-        .pipe(replace("@TITLE@", "Robin Monteil - Web development, domotic, space, and random geekeries"))
+        .pipe(replace("@TITLE@", "Web development, domotic, space, and random geekeries"))
         .pipe(replace("@CONTENT@", articles.join("")))
         .pipe(replace("@JS_HIGHLIGHT_LANGUAGES@", ""))
         .pipe(rename("./index.html"))
+        .pipe(gulp.dest("./"));
+};
+
+const generateContactPage = () => {
+    const contactPageHtml = utils.getFileContent("/src/templates/contact.html");
+
+    return gulp.src(path.join(__dirname, "src/templates/layout.html"))
+        .pipe(replace('<div class="mdl-grid portfolio-max-width">', '<div class="mdl-grid portfolio-max-width portfolio-contact">'))
+        .pipe(replace("@TITLE@", "Contact"))
+        .pipe(replace("@CONTENT@", contactPageHtml))
+        .pipe(replace("@JS_HIGHLIGHT_LANGUAGES@", ""))
+        .pipe(rename("./contact.html"))
         .pipe(gulp.dest("./"));
 };
 
@@ -159,6 +171,7 @@ const watchFiles = () => {
                     generateHtmlArticles,
                     gulp.parallel(populateHomePage, generateArticlesIndex),
                 ),
+                generateContactPage,
                 copyAssets
             ),
             browserSyncReload
@@ -235,11 +248,13 @@ gulp.task("build",
     gulp.series(
         cleanDir,
         gulp.parallel(
-            gulp.series(generateHtmlArticles, populateHomePage, generateArticlesIndex, minifyHtml, generateSitemap),
+            gulp.series(generateHtmlArticles, populateHomePage, generateArticlesIndex),
+            generateContactPage,
             minifyCss,
             // minifyJs,
             minifyImg,
-        )
+        ),
+        gulp.parallel(minifyHtml, generateSitemap),
     )
 );
 
