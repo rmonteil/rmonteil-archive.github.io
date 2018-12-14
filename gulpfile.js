@@ -10,6 +10,7 @@ const cleanCSS = require('gulp-clean-css');
 const imagemin = require('gulp-imagemin');
 const clean = require('gulp-clean');
 const sitemap = require('gulp-sitemap');
+const rename = require("gulp-rename");
 const bs = require('browser-sync').create();
 const md = require('markdown-it')({
     highlight: function (str, lang) {
@@ -23,6 +24,7 @@ const md = require('markdown-it')({
     }
 });
 
+// TODO Faire un fichier de config avec toutes les infos reprises un peu partout
 // TODO Intégrer la date de rédaction de l'article dans le nom du fichier html, sans écraser si modification
 // TODO Faire en sorte que l'affichage des articles de la page d'accueil soit "sympa" = pas toujours les mêmes rectangles
 // TODO Resize automatique des images dans les différents formats voulus
@@ -84,10 +86,25 @@ const md2html = (template) => {
         article.content += "</div>";
 
         // Replace placeholders by article's data
-        const finalHtml = template
-            .replace("@ARTICLE_TITLE@", article.title)
-            .replace("@ARTICLE_IMAGE@", article.image)
-            .replace("@ARTICLE_CONTENT@", article.content)
+        // const finalHtml = template
+        //     .replace("@ARTICLE_TITLE@", article.title)
+        //     .replace("@ARTICLE_IMAGE@", article.image)
+        //     .replace("@ARTICLE_CONTENT@", article.content)
+        //     .replace("@JS_HIGHLIGHT_LANGUAGES@", highlightLanguagesScripts);
+
+        const finalHtml = template.replace("@CONTENT@", `
+            <div class="mdl-cell mdl-cell--12-col mdl-card mdl-shadow--4dp">
+                <div class="mdl-card__title">
+                    <h2 class="mdl-card__title-text">${article.title}</h2>
+                </div>
+                <!-- <div class="mdl-card__media">
+                    <img class="article-image" src="../assets/img/${article.image}" border="0" alt="">
+                </div> -->
+
+                <div class="mdl-grid portfolio-copy">${article.content}</div>
+            </div>
+        `)
+            .replace("@TITLE@", article.title)
             .replace("@JS_HIGHLIGHT_LANGUAGES@", highlightLanguagesScripts);
 
         // Create buffer
@@ -100,33 +117,59 @@ const md2html = (template) => {
 }
 
 const generateHtmlArticles = () => {
-    const template = fs.readFileSync("./src/templates/article.html").toString();
+    const template = fs.readFileSync("./src/templates/layout.html").toString();
 
     return gulp.src(path.join(__dirname, "src/articles/**/*.md"))
         .pipe(md2html(template))
         .pipe(gulp.dest("./articles"));
 };
 
+const generateArticlesIndex = () => {
+    const articlesUrl = [];
+    const articleFiles = fs.readdirSync(path.join(__dirname, "articles"));
+    articleFiles.forEach((filename) => {
+        if (filename !== "index.html") {
+            const filePath = path.join(__dirname, "articles", filename);
+            const fileContent = fs.readFileSync(filePath, 'utf-8').toString();
+            articlesUrl.push(`<li><a href="/articles/${filename}">${/<h2 class="mdl\-card__title-text">(.+)<\/h2>/.exec(fileContent)[1]}</a></li>`);
+        }
+    });
+    let articlesTpl = fs.readFileSync("./src/templates/articles.html").toString();
+    articlesTpl = articlesTpl
+        .replace("@TITLE@", "Categories")
+        .replace("@ARTICLES_LIST@", articlesUrl.join(""));
+
+    return gulp.src(path.join(__dirname, "src/templates/layout.html"))
+        .pipe(replace("@TITLE@", "Categories"))
+        .pipe(replace("@CONTENT@", articlesTpl))
+        .pipe(rename("./articles/index.html"))
+        .pipe(gulp.dest("./"));
+}
+
 const populateHomePage = () => {
     const cardTpl = fs.readFileSync("./src/templates/components/article-card.html").toString();
     const articles = [];
     const articleFiles = fs.readdirSync(path.join(__dirname, "articles"));
     articleFiles.forEach(function (filename) {
-        const filePath = path.join(__dirname, "articles", filename);
-        const stats = fs.lstatSync(filePath);
-        if (stats.isFile()) {
-            const fileContent = fs.readFileSync(filePath, 'utf-8').toString();
-            articles.push(cardTpl
-                .replace("@ARTICLE_IMAGE@", path.join("./", filename).replace(".html", "") + ".jpg")
-                .replace("@ARTICLE_TITLE@", /<h2 class="mdl\-card__title-text">(.+)<\/h2>/.exec(fileContent)[1])
-                .replace("@ARTICLE_CONTENT@", "")
-                .replace("@ARTICLE_PATH@", path.join("./articles/", filename))
-            );
+        if (filename !== "index.html") {
+            const filePath = path.join(__dirname, "articles", filename);
+            const stats = fs.lstatSync(filePath);
+            if (stats.isFile()) {
+                const fileContent = fs.readFileSync(filePath, 'utf-8').toString();
+                articles.push(cardTpl
+                    .replace("@ARTICLE_IMAGE@", path.join("./", filename).replace(".html", "") + ".jpg")
+                    .replace("@ARTICLE_TITLE@", /<h2 class="mdl\-card__title-text">(.+)<\/h2>/.exec(fileContent)[1])
+                    .replace("@ARTICLE_CONTENT@", "")
+                    .replace(/@ARTICLE_PATH@/gm, path.join("./articles/", filename))
+                );
+            }
         }
     });
 
-    return gulp.src(path.join(__dirname, "src/templates/index.html"))
-        .pipe(replace("@ARTICLES@", articles.join("")))
+    return gulp.src(path.join(__dirname, "src/templates/layout.html"))
+        .pipe(replace("@TITLE@", "Robin Monteil - Web development, domotic, space, and random geekeries"))
+        .pipe(replace("@CONTENT@", articles.join("")))
+        .pipe(rename("./index.html"))
         .pipe(gulp.dest("./"));
 };
 
@@ -135,9 +178,13 @@ const watchFiles = () => {
         ["./src/**/*.*"],
         { ignoreInitial: false },
         gulp.series(
-            generateHtmlArticles,
-            populateHomePage,
-            copyAssets,
+            gulp.parallel(
+                gulp.series(
+                    generateHtmlArticles,
+                    gulp.parallel(populateHomePage, generateArticlesIndex),
+                ),
+                copyAssets
+            ),
             browserSyncReload
         )
     );
@@ -209,7 +256,7 @@ gulp.task("build",
     gulp.series(
         cleanDir,
         gulp.parallel(
-            gulp.series(generateHtmlArticles, populateHomePage, minifyHtml, generateSitemap),
+            gulp.series(generateHtmlArticles, populateHomePage, generateArticlesIndex, minifyHtml, generateSitemap),
             minifyCss,
             // minifyJs,
             minifyImg,
