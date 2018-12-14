@@ -6,7 +6,7 @@ const hljs = require('highlight.js');
 const replace = require('gulp-replace');
 const htmlmin = require('gulp-htmlmin');
 const cleanCSS = require('gulp-clean-css');
-// const uglify = require('gulp-uglify');
+// const uglify = require('gulp-uglify'); // To re-activate for JS min
 const imagemin = require('gulp-imagemin');
 const clean = require('gulp-clean');
 const sitemap = require('gulp-sitemap');
@@ -23,17 +23,20 @@ const md = require('markdown-it')({
         return ''; // use external default escaping
     }
 });
+const utils = require("./build-tools/utils");
+const articless = utils.getArticlesList();
 
+// TODO Gérer des catégories d'articles. Avoir une page par catégorie qui liste les articles
 // TODO Faire un fichier de config avec toutes les infos reprises un peu partout
 // TODO Intégrer la date de rédaction de l'article dans le nom du fichier html, sans écraser si modification
 // TODO Faire en sorte que l'affichage des articles de la page d'accueil soit "sympa" = pas toujours les mêmes rectangles
 // TODO Resize automatique des images dans les différents formats voulus
-// TODO Gérer des catégories d'articles. Avoir une page par catégorie qui liste les articles
 // TODO Audit SEO
 // TODO Afficher la date de dernière mise à jour de l'article dans le fichier html
 // TODO Mettre le site sur www au lieu de blog (ovh + github)
 // TODO Possibilité de voir le site en offline (webworker)
 // TODO PWA ?
+// TODO Mettre le bon menu en "actif"
 
 // BrowserSync
 function browserSync(done) {
@@ -64,48 +67,25 @@ const md2html = (template) => {
             content: mdFileContent.replace(/^# (.+)\n+/m, ""),
         };
 
-        // Detect code blocks' languages
-        highlightLanguagesScripts = article.content.match(/^```(\w+)$/gmi);
-        highlightLanguagesScripts = highlightLanguagesScripts
-            .filter(function (item, pos, self) {
-                return self.indexOf(item) == pos;
-            })
-            .map((language) => {
-                language = language.replace("```", "");
-                language = `<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.13.1/languages/${language}.min.js"></script>`
-                return language;
-            });
-        highlightLanguagesScripts = highlightLanguagesScripts.join("");
+        // Get the language js file according to the type of languages used on the page
+        const highlightScripts = utils.getHighLightLanguages(article.content);
 
         // Generate HTML file
         article.content = md.render(article.content);
-        article.content = article.content.replace(/<h2>(.*)<\/h2>/gm, '</div><h3 class="mdl-cell mdl-cell--12-col mdl-typography--headline">$1</h3><div class="mdl-cell mdl-cell--8-col mdl-card__supporting-text no-padding ">');
-        if (article.content.substring(0, 3) !== "<h3") {
-            article.content = '<div class="mdl-cell mdl-cell--8-col mdl-card__supporting-text no-padding ">' + article.content;
-        }
-        article.content += "</div>";
+        article.content = utils.formatArticle(article.content);
 
         // Replace placeholders by article's data
-        // const finalHtml = template
-        //     .replace("@ARTICLE_TITLE@", article.title)
-        //     .replace("@ARTICLE_IMAGE@", article.image)
-        //     .replace("@ARTICLE_CONTENT@", article.content)
-        //     .replace("@JS_HIGHLIGHT_LANGUAGES@", highlightLanguagesScripts);
-
-        const finalHtml = template.replace("@CONTENT@", `
-            <div class="mdl-cell mdl-cell--12-col mdl-card mdl-shadow--4dp">
-                <div class="mdl-card__title">
-                    <h2 class="mdl-card__title-text">${article.title}</h2>
-                </div>
-                <!-- <div class="mdl-card__media">
-                    <img class="article-image" src="../assets/img/${article.image}" border="0" alt="">
-                </div> -->
-
-                <div class="mdl-grid portfolio-copy">${article.content}</div>
-            </div>
-        `)
+        let articleTemplate = utils.getFileContent("/src/templates/article.html");
+        articleTemplate = articleTemplate
             .replace("@TITLE@", article.title)
-            .replace("@JS_HIGHLIGHT_LANGUAGES@", highlightLanguagesScripts);
+            .replace("@IMAGE@", article.image)
+            .replace("@CONTENT@", article.content);
+
+        // Inject article into layout
+        const finalHtml = template
+            .replace("@TITLE@", article.title)
+            .replace("@CONTENT@", articleTemplate)
+            .replace("@JS_HIGHLIGHT_LANGUAGES@", highlightScripts);
 
         // Create buffer
         const htmlFile = chunk.clone();
@@ -117,7 +97,7 @@ const md2html = (template) => {
 }
 
 const generateHtmlArticles = () => {
-    const template = fs.readFileSync("./src/templates/layout.html").toString();
+    const template = utils.getFileContent("src/templates/layout.html");
 
     return gulp.src(path.join(__dirname, "src/articles/**/*.md"))
         .pipe(md2html(template))
@@ -126,13 +106,14 @@ const generateHtmlArticles = () => {
 
 const generateArticlesIndex = () => {
     const articlesUrl = [];
-    const articleFiles = fs.readdirSync(path.join(__dirname, "articles"));
-    articleFiles.forEach((filename) => {
-        if (filename !== "index.html") {
-            const filePath = path.join(__dirname, "articles", filename);
-            const fileContent = fs.readFileSync(filePath, 'utf-8').toString();
-            articlesUrl.push(`<li><a href="/articles/${filename}">${/<h2 class="mdl\-card__title-text">(.+)<\/h2>/.exec(fileContent)[1]}</a></li>`);
-        }
+    const articleFiles = utils.getArticlesList();
+    articleFiles.forEach((article) => {
+        const articleContent = utils.getFileContent(article);
+        let itemTpl = utils.getFileContent("src/templates/components/articles-list-item.html");
+        itemTpl = itemTpl
+            .replace("@TITLE@", /<h2 class="mdl\-card__title-text">(.+)<\/h2>/.exec(articleContent)[1])
+            .replace("@FILE_PATH@", article);
+        articlesUrl.push(itemTpl);
     });
     let articlesTpl = fs.readFileSync("./src/templates/articles.html").toString();
     articlesTpl = articlesTpl
@@ -147,28 +128,23 @@ const generateArticlesIndex = () => {
 }
 
 const populateHomePage = () => {
-    const cardTpl = fs.readFileSync("./src/templates/components/article-card.html").toString();
+    const cardTpl = utils.getFileContent("/src/templates/components/home-article-card.html");
     const articles = [];
-    const articleFiles = fs.readdirSync(path.join(__dirname, "articles"));
-    articleFiles.forEach(function (filename) {
-        if (filename !== "index.html") {
-            const filePath = path.join(__dirname, "articles", filename);
-            const stats = fs.lstatSync(filePath);
-            if (stats.isFile()) {
-                const fileContent = fs.readFileSync(filePath, 'utf-8').toString();
-                articles.push(cardTpl
-                    .replace("@ARTICLE_IMAGE@", path.join("./", filename).replace(".html", "") + ".jpg")
-                    .replace("@ARTICLE_TITLE@", /<h2 class="mdl\-card__title-text">(.+)<\/h2>/.exec(fileContent)[1])
-                    .replace("@ARTICLE_CONTENT@", "")
-                    .replace(/@ARTICLE_PATH@/gm, path.join("./articles/", filename))
-                );
-            }
-        }
+    const articleFiles = utils.getArticlesList();
+    articleFiles.forEach(function (articlePath) {
+        const articleContent = utils.getFileContent(articlePath);
+        articles.push(cardTpl
+            .replace("@ARTICLE_IMAGE@", utils.getImagePathForArticle(articlePath))
+            .replace("@ARTICLE_TITLE@", /<h2 class="mdl\-card__title-text">(.+)<\/h2>/.exec(articleContent)[1])
+            .replace("@ARTICLE_CONTENT@", "")
+            .replace(/@ARTICLE_PATH@/gm, articlePath)
+        );
     });
 
     return gulp.src(path.join(__dirname, "src/templates/layout.html"))
         .pipe(replace("@TITLE@", "Robin Monteil - Web development, domotic, space, and random geekeries"))
         .pipe(replace("@CONTENT@", articles.join("")))
+        .pipe(replace("@JS_HIGHLIGHT_LANGUAGES@", ""))
         .pipe(rename("./index.html"))
         .pipe(gulp.dest("./"));
 };
@@ -248,7 +224,10 @@ const cleanDir = () => {
         "./sitemap.xml",
         "./articles",
         "./assets"
-    ], { read: false })
+    ], {
+            read: false,
+            allowEmpty: true
+        })
         .pipe(clean());
 }
 
