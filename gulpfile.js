@@ -24,7 +24,6 @@ const md = require('markdown-it')({
     }
 });
 const utils = require("./build-tools/utils");
-const articless = utils.getArticlesList();
 
 // TODO UTILE ? Gérer des catégories d'articles. Avoir une page par catégorie qui liste les articles
 // TODO Faire un fichier de config avec toutes les infos reprises un peu partout
@@ -91,6 +90,11 @@ const md2html = (template) => {
         const htmlFile = chunk.clone();
         htmlFile.contents = Buffer.from(finalHtml);
         htmlFile.path = path.join(filePath.dir, filePath.name + ".html");
+
+        // Add or update the article in the history
+        utils.article.exists(filePath.name)
+            ? utils.article.setEditionDate(filePath.name)
+            : utils.article.setCreationDate(filePath.name);
 
         cb(null, htmlFile);
     });
@@ -214,6 +218,11 @@ const copyAssets = () => {
 };
 
 const generateSitemap = () => {
+    // We take profit of this task being done at
+    // the end of the build process to clean the
+    // file "articles-history.json"
+    utils.article.clean();
+
     return gulp.src(["./index.html", "./articles/**/*.html"], {
         read: false,
         base: ".",
@@ -243,6 +252,7 @@ const cleanDir = () => {
         })
         .pipe(clean());
 }
+
 
 gulp.task("build",
     gulp.series(

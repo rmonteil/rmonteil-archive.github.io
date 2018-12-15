@@ -19,6 +19,10 @@ exports.getFileContent = (filename) => {
     }
 };
 
+exports.saveFileContent = (filename, content) => {
+    fs.writeFileSync(path.join(__dirname, "..", filename), content);
+};
+
 exports.getImagePathForArticle = (filename) => {
     return filename
         .replace("articles/", "")
@@ -56,4 +60,34 @@ exports.formatArticle = (article) => {
     article += "</div>";
 
     return article;
+};
+
+exports.article = {
+    exists: (articleName) => {
+        const history = JSON.parse(this.getFileContent("/articles-history.json"));
+        return history.hasOwnProperty(articleName);
+    },
+    clean: () => {
+        const history = JSON.parse(this.getFileContent("/articles-history.json"));
+        Object.keys(history).map(historyEntry => {
+            if (!fs.existsSync(path.join(__dirname, `../articles/${historyEntry}.html`))) {
+                delete history[historyEntry];
+            }
+        });
+
+        this.saveFileContent("/articles-history.json", JSON.stringify(history, null, 4));
+    },
+    setCreationDate: (articleName) => {
+        const history = JSON.parse(this.getFileContent("/articles-history.json"));
+        history[articleName] = {
+            creation: new Date().toUTCString(),
+            lastUpdate: null
+        };
+        this.saveFileContent("/articles-history.json", JSON.stringify(history, null, 4));
+    },
+    setEditionDate: (articleName) => {
+        const history = JSON.parse(this.getFileContent("/articles-history.json"));
+        history[articleName].lastUpdate = new Date().toUTCString();
+        this.saveFileContent("/articles-history.json", JSON.stringify(history, null, 4));
+    }
 };
