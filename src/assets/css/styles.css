@@ -173,7 +173,7 @@ footer {
   width: 100%;
 }
 
-.portfolio-copy > .mdl-card__title-text {
+h2.mdl-card__title-text {
   font-size: 30px;
 }
 
@@ -185,4 +185,18 @@ h2.mdl-card__title-text > a {
   line-height: 29px;
   margin-bottom: 0px;
   margin-left: 0px;
+}
+
+.publication-date {
+  width: 100%;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: lightgrey;
+  margin-bottom: 20px;
+}
+
+pre {
+  background-color: #F6F6F6;
+  padding: 15px;
+  border: 1px solid #ECECEC;
 }

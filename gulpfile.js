@@ -73,12 +73,24 @@ const md2html = (template) => {
         article.content = md.render(article.content);
         article.content = utils.formatArticle(article.content);
 
+        // Add or update the article in the history
+        if (utils.article.exists(filePath.name)) {
+            utils.article.setLastUpdateDate(filePath.name)
+        } else {
+            utils.article.setCreationDate(filePath.name);
+        }
+
         // Replace placeholders by article's data
         let articleTemplate = utils.getFileContent("/src/templates/article.html");
         articleTemplate = articleTemplate
             .replace("@TITLE@", article.title)
             .replace("@IMAGE@", article.image)
-            .replace("@CONTENT@", article.content);
+            .replace("@CONTENT@", article.content)
+            .replace("@CREATION_DATE@", "Published on " + utils.article.getCreationDate(filePath.name).substring(0, 10))
+            .replace("@LAST_UPDATE_DATE@", () => {
+                const lastUpdateDate = utils.article.getLastUpdateDate(filePath.name);
+                return lastUpdateDate ? ", last update on " + lastUpdateDate.substring(0, 10) : "";
+            });
 
         // Inject article into layout
         const finalHtml = template
@@ -91,11 +103,6 @@ const md2html = (template) => {
         htmlFile.contents = Buffer.from(finalHtml);
         htmlFile.path = path.join(filePath.dir, filePath.name + ".html");
 
-        // Add or update the article in the history
-        utils.article.exists(filePath.name)
-            ? utils.article.setEditionDate(filePath.name)
-            : utils.article.setCreationDate(filePath.name);
-
         cb(null, htmlFile);
     });
 }
@@ -103,8 +110,12 @@ const md2html = (template) => {
 const generateHtmlArticles = () => {
     const template = utils.getFileContent("src/templates/layout.html");
 
-    return gulp.src(path.join(__dirname, "src/articles/**/*.md"))
+    return gulp.src(path.join(__dirname, "src/articles/*.md"))
         .pipe(md2html(template))
+        .pipe(rename((path) => {
+            const creationDate = utils.article.getCreationDate(path.basename);
+            path.basename = creationDate.substring(0, 10) + "-" + path.basename;
+        }))
         .pipe(gulp.dest("./articles"));
 };
 
@@ -136,12 +147,15 @@ const populateHomePage = () => {
     const articles = [];
     const articleFiles = utils.getArticlesList();
     articleFiles.forEach(function (articlePath) {
-        const articleContent = utils.getFileContent(articlePath);
+        const basename = articlePath.replace("/articles/", "").replace(".html", "");
+
+        const articlePathWithDate = articlePath.replace("/articles/", "/articles/" + utils.article.getCreationDate(basename).substring(0, 10) + "-");
+        const articleContent = utils.getFileContent(articlePathWithDate);
         articles.push(cardTpl
             .replace("@ARTICLE_IMAGE@", utils.getImagePathForArticle(articlePath))
             .replace("@ARTICLE_TITLE@", /<h2 class="mdl\-card__title-text">(.+)<\/h2>/.exec(articleContent)[1])
             .replace("@ARTICLE_CONTENT@", "")
-            .replace(/@ARTICLE_PATH@/gm, articlePath)
+            .replace(/@ARTICLE_PATH@/gm, articlePathWithDate)
         );
     });
 
@@ -173,7 +187,10 @@ const watchFiles = () => {
             gulp.parallel(
                 gulp.series(
                     generateHtmlArticles,
-                    gulp.parallel(populateHomePage, generateArticlesIndex),
+                    gulp.parallel(
+                        populateHomePage,
+                        // generateArticlesIndex
+                    ),
                 ),
                 generateContactPage,
                 copyAssets
@@ -258,7 +275,11 @@ gulp.task("build",
     gulp.series(
         cleanDir,
         gulp.parallel(
-            gulp.series(generateHtmlArticles, populateHomePage, generateArticlesIndex),
+            gulp.series(
+                generateHtmlArticles,
+                populateHomePage,
+                // generateArticlesIndex
+            ),
             generateContactPage,
             minifyCss,
             // minifyJs,

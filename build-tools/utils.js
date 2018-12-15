@@ -25,7 +25,7 @@ exports.saveFileContent = (filename, content) => {
 
 exports.getImagePathForArticle = (filename) => {
     return filename
-        .replace("articles/", "")
+        .replace("/articles/", "")
         .replace(".html", ".jpg");
 };
 
@@ -38,6 +38,9 @@ exports.getHighLightLanguages = (articleContent) => {
             })
             .map((language) => {
                 language = language.replace("```", "");
+                if (language === "js") {
+                    language = "javascript";
+                }
                 language = `<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.13.1/languages/${language}.min.js"></script>`
                 return language;
             });
@@ -70,7 +73,7 @@ exports.article = {
     clean: () => {
         const history = JSON.parse(this.getFileContent("/articles-history.json"));
         Object.keys(history).map(historyEntry => {
-            if (!fs.existsSync(path.join(__dirname, `../articles/${historyEntry}.html`))) {
+            if (!fs.existsSync(path.join(__dirname, `../articles/${history[historyEntry].creation.substring(0, 10)}-${historyEntry}.html`))) {
                 delete history[historyEntry];
             }
         });
@@ -80,14 +83,28 @@ exports.article = {
     setCreationDate: (articleName) => {
         const history = JSON.parse(this.getFileContent("/articles-history.json"));
         history[articleName] = {
-            creation: new Date().toUTCString(),
+            creation: new Date().toISOString(),
             lastUpdate: null
         };
         this.saveFileContent("/articles-history.json", JSON.stringify(history, null, 4));
     },
-    setEditionDate: (articleName) => {
+    setLastUpdateDate: (articleName) => {
         const history = JSON.parse(this.getFileContent("/articles-history.json"));
-        history[articleName].lastUpdate = new Date().toUTCString();
+        history[articleName].lastUpdate = new Date().toISOString();
         this.saveFileContent("/articles-history.json", JSON.stringify(history, null, 4));
+    },
+    getCreationDate: (articleName) => {
+        const history = JSON.parse(this.getFileContent("/articles-history.json"));
+        if (history.hasOwnProperty(articleName)) {
+            return history[articleName].creation;
+        }
+        return false;
+    },
+    getLastUpdateDate: (articleName) => {
+        const history = JSON.parse(this.getFileContent("/articles-history.json"));
+        if (history.hasOwnProperty(articleName)) {
+            return history[articleName].lastUpdate;
+        }
+        return false;
     }
 };
