@@ -1,7 +1,21 @@
 # Robin Monteil's Blog
 
 ## Build
-TODO
+```
+npm run build
+```
+
+While coding:
+```
+npm run watch
+```
 
 ## Publish
-TODO
+```
+npm run publish
+```
+
+## Tests
+```
+npm test
+```
