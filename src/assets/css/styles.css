@@ -200,3 +200,8 @@ pre {
   padding: 15px;
   border: 1px solid #ECECEC;
 }
+
+/* CUSTOMIZATION */
+.portfolio-copy p {
+  font-size: 1.2em;
+}
