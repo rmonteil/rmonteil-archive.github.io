@@ -205,3 +205,23 @@ pre {
 .portfolio-copy p {
   font-size: 1.2em;
 }
+
+#contact-description > p {
+  font-size: 20px;
+}
+
+#card-image-profile.mdl-card {
+  width: 200px;
+  height: 200px;
+  border: 10px solid white;
+  background: url('https://fr.gravatar.com/userimage/114834490/b1086e0b694ea05a503e090e7bdeb3c9.png?size=200') center / cover;
+}
+
+.card-external-profile.mdl-card > a {
+  width: 120px;
+  margin: auto;
+}
+
+.card-external-profile .mdl-card__actions {
+  text-align: center;
+}
