@@ -179,7 +179,7 @@ const generateContactPage = () => {
 };
 
 const minifyHtml = () => {
-    return gulp.src(["index.html", "articles/**/*.html"], { base: "." })
+    return gulp.src(["index.html", "contact.html", "articles/**/*.html"], { base: "." })
         .pipe(htmlmin({
             collapseWhitespace: true,
             minifyCSS: true,
