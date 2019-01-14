@@ -25,5 +25,7 @@
     "markdown-it": "^8.4.2",
     "through2": "^3.0.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "md5-file": "^4.0.0"
+  }
 }

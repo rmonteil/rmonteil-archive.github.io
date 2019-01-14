@@ -65,6 +65,26 @@ exports.formatArticle = (article) => {
     return article;
 };
 
+exports.updateArticlesDates = () => {
+    // const history = JSON.parse(this.getFileContent("/articles-history.json"));
+
+    const articleFiles = this.getArticlesList();
+    articleFiles.forEach((articlePath) => {
+        const creationDate = this.article.getCreationDate(articlePath).substring(0, 10);
+        let fileContent = this.getFileContent(articlePath);
+
+        fileContent = fileContent
+            .replace("@CREATION_DATE@", "Published on " + creationDate)
+            .replace("@LAST_UPDATE_DATE@", () => {
+                const lastUpdateDate = this.article.getLastUpdateDate(articlePath).substring(0, 10);
+                return lastUpdateDate !== creationDate ? ", last update on " + lastUpdateDate : "";
+            });
+
+        this.saveFileContent(articlePath, fileContent);
+        fs.renameSync("." + articlePath, articlePath.replace("/articles/", `./articles/${creationDate}-`));
+    });
+};
+
 exports.article = {
     exists: (articleName) => {
         const history = JSON.parse(this.getFileContent("/articles-history.json"));
@@ -73,38 +93,43 @@ exports.article = {
     clean: () => {
         const history = JSON.parse(this.getFileContent("/articles-history.json"));
         Object.keys(history).map(historyEntry => {
-            if (!fs.existsSync(path.join(__dirname, `../articles/${history[historyEntry].creation.substring(0, 10)}-${historyEntry}.html`))) {
+            historyEntry = "." + historyEntry.replace("/articles/", `/articles/${history[historyEntry].creation.substring(0, 10)}-`);
+            if (!fs.existsSync(historyEntry)) {
                 delete history[historyEntry];
             }
         });
 
         this.saveFileContent("/articles-history.json", JSON.stringify(history, null, 4));
     },
-    setCreationDate: (articleName) => {
+    setCreationDate: (articlePath, creationDate, hash) => {
         const history = JSON.parse(this.getFileContent("/articles-history.json"));
-        history[articleName] = {
-            creation: new Date().toISOString(),
-            lastUpdate: null
+        history[articlePath] = {
+            creation: creationDate.toISOString(),
+            lastUpdate: creationDate.toISOString(),
+            hash: hash
         };
+        console.log("save creation history:", history);
         this.saveFileContent("/articles-history.json", JSON.stringify(history, null, 4));
     },
-    setLastUpdateDate: (articleName) => {
+    setLastUpdateDate: (articlePath, newUpdateDate, hash) => {
         const history = JSON.parse(this.getFileContent("/articles-history.json"));
-        history[articleName].lastUpdate = new Date().toISOString();
+        history[articlePath].lastUpdate = newUpdateDate.toISOString();
+        history[articlePath].hash = hash;
+        console.log("save update history:", history);
         this.saveFileContent("/articles-history.json", JSON.stringify(history, null, 4));
     },
-    getCreationDate: (articleName) => {
+    getCreationDate: (articlePath) => {
         const history = JSON.parse(this.getFileContent("/articles-history.json"));
-        if (history.hasOwnProperty(articleName)) {
-            return history[articleName].creation;
+        if (history.hasOwnProperty(articlePath)) {
+            return history[articlePath].creation;
         }
         return false;
     },
-    getLastUpdateDate: (articleName) => {
+    getLastUpdateDate: (articlePath) => {
         const history = JSON.parse(this.getFileContent("/articles-history.json"));
-        if (history.hasOwnProperty(articleName)) {
-            return history[articleName].lastUpdate;
+        if (history.hasOwnProperty(articlePath)) {
+            return history[articlePath].lastUpdate;
         }
         return false;
-    }
+    },
 };

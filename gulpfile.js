@@ -23,16 +23,16 @@ const md = require('markdown-it')({
         return ''; // use external default escaping
     }
 });
+const md5File = require('md5-file');
 const utils = require("./build-tools/utils");
-
+const currentDate = new Date();
+// TODO Ajouter photo sur page contact. Utiliser le format "card" ?
 // TODO UTILE ? Gérer des catégories d'articles. Avoir une page par catégorie qui liste les articles
 // TODO Faire un fichier de config avec toutes les infos reprises un peu partout
-// TODO Intégrer la date de rédaction de l'article dans le nom du fichier html, sans écraser si modification
 // TODO Faire en sorte que l'affichage des articles de la page d'accueil soit "sympa" = pas toujours les mêmes rectangles
 // TODO Resize automatique des images dans les différents formats voulus
+// TODO Optimiser les images
 // TODO Audit SEO
-// TODO Afficher la date de dernière mise à jour de l'article dans le fichier html
-// TODO Mettre le site sur www au lieu de blog (ovh + github)
 // TODO Possibilité de voir le site en offline (webworker)
 // TODO PWA ?
 // TODO Mettre le bon menu en "actif"
@@ -73,24 +73,12 @@ const md2html = (template) => {
         article.content = md.render(article.content);
         article.content = utils.formatArticle(article.content);
 
-        // Add or update the article in the history
-        if (utils.article.exists(filePath.name)) {
-            utils.article.setLastUpdateDate(filePath.name)
-        } else {
-            utils.article.setCreationDate(filePath.name);
-        }
-
         // Replace placeholders by article's data
         let articleTemplate = utils.getFileContent("/src/templates/article.html");
         articleTemplate = articleTemplate
             .replace("@TITLE@", article.title)
             .replace("@IMAGE@", article.image)
-            .replace("@CONTENT@", article.content)
-            .replace("@CREATION_DATE@", "Published on " + utils.article.getCreationDate(filePath.name).substring(0, 10))
-            .replace("@LAST_UPDATE_DATE@", () => {
-                const lastUpdateDate = utils.article.getLastUpdateDate(filePath.name);
-                return lastUpdateDate ? ", last update on " + lastUpdateDate.substring(0, 10) : "";
-            });
+            .replace("@CONTENT@", article.content);
 
         // Inject article into layout
         const finalHtml = template
@@ -112,44 +100,55 @@ const generateHtmlArticles = () => {
 
     return gulp.src(path.join(__dirname, "src/articles/*.md"))
         .pipe(md2html(template))
-        .pipe(rename((path) => {
-            const creationDate = utils.article.getCreationDate(path.basename);
-            path.basename = creationDate.substring(0, 10) + "-" + path.basename;
-        }))
         .pipe(gulp.dest("./articles"));
 };
 
-const generateArticlesIndex = () => {
-    const articlesUrl = [];
+const regenerateHistory = (done) => {
     const articleFiles = utils.getArticlesList();
-    articleFiles.forEach((article) => {
-        const articleContent = utils.getFileContent(article);
-        let itemTpl = utils.getFileContent("src/templates/components/articles-list-item.html");
-        itemTpl = itemTpl
-            .replace("@TITLE@", /<h2 class="mdl\-card__title-text">(.+)<\/h2>/.exec(articleContent)[1])
-            .replace("@FILE_PATH@", article);
-        articlesUrl.push(itemTpl);
+    const history = JSON.parse(utils.getFileContent("/articles-history.json"));
+    articleFiles.forEach((articlePath) => {
+        const currentHash = md5File.sync("." + articlePath);
+        // Add or update the article in the history
+        if (Object.keys(history).includes(articlePath) && history[articlePath].hash !== currentHash) {
+            utils.article.setLastUpdateDate(articlePath, currentDate, currentHash)
+        } else if (!Object.keys(history).includes(articlePath)) {
+            utils.article.setCreationDate(articlePath, currentDate, currentHash);
+        }
     });
-    let articlesTpl = fs.readFileSync("./src/templates/articles.html").toString();
-    articlesTpl = articlesTpl
-        .replace("@TITLE@", "Categories")
-        .replace("@ARTICLES_LIST@", articlesUrl.join(""));
 
-    return gulp.src(path.join(__dirname, "src/templates/layout.html"))
-        .pipe(replace("@TITLE@", "Categories"))
-        .pipe(replace("@CONTENT@", articlesTpl))
-        .pipe(rename("./articles/index.html"))
-        .pipe(gulp.dest("./"));
-}
+    utils.updateArticlesDates();
+    done();
+};
+
+// const generateArticlesIndex = () => {
+//     const articlesUrl = [];
+//     const articleFiles = utils.getArticlesList();
+//     articleFiles.forEach((article) => {
+//         const articleContent = utils.getFileContent(article);
+//         let itemTpl = utils.getFileContent("src/templates/components/articles-list-item.html");
+//         itemTpl = itemTpl
+//             .replace("@TITLE@", /<h2 class="mdl\-card__title-text">(.+)<\/h2>/.exec(articleContent)[1])
+//             .replace("@FILE_PATH@", article);
+//         articlesUrl.push(itemTpl);
+//     });
+//     let articlesTpl = fs.readFileSync("./src/templates/articles.html").toString();
+//     articlesTpl = articlesTpl
+//         .replace("@TITLE@", "Categories")
+//         .replace("@ARTICLES_LIST@", articlesUrl.join(""));
+
+//     return gulp.src(path.join(__dirname, "src/templates/layout.html"))
+//         .pipe(replace("@TITLE@", "Categories"))
+//         .pipe(replace("@CONTENT@", articlesTpl))
+//         .pipe(rename("./articles/index.html"))
+//         .pipe(gulp.dest("./"));
+// }
 
 const populateHomePage = () => {
     const cardTpl = utils.getFileContent("/src/templates/components/home-article-card.html");
     const articles = [];
     const articleFiles = utils.getArticlesList();
     articleFiles.forEach(function (articlePath) {
-        const basename = articlePath.replace("/articles/", "").replace(".html", "");
-
-        const articlePathWithDate = articlePath.replace("/articles/", "/articles/" + utils.article.getCreationDate(basename).substring(0, 10) + "-");
+        const articlePathWithDate = articlePath.replace("/articles/", "/articles/" + utils.article.getCreationDate(articlePath).substring(0, 10) + "-");
         const articleContent = utils.getFileContent(articlePathWithDate);
         articles.push(cardTpl
             .replace("@ARTICLE_IMAGE@", utils.getImagePathForArticle(articlePath))
@@ -177,27 +176,6 @@ const generateContactPage = () => {
         .pipe(replace("@JS_HIGHLIGHT_LANGUAGES@", ""))
         .pipe(rename("./contact.html"))
         .pipe(gulp.dest("./"));
-};
-
-const watchFiles = () => {
-    gulp.watch(
-        ["./src/**/*.*"],
-        { ignoreInitial: false },
-        gulp.series(
-            gulp.parallel(
-                gulp.series(
-                    generateHtmlArticles,
-                    gulp.parallel(
-                        populateHomePage,
-                        // generateArticlesIndex
-                    ),
-                ),
-                generateContactPage,
-                copyAssets
-            ),
-            browserSyncReload
-        )
-    );
 };
 
 const minifyHtml = () => {
@@ -277,16 +255,46 @@ gulp.task("build",
         gulp.parallel(
             gulp.series(
                 generateHtmlArticles,
+                regenerateHistory,
                 populateHomePage,
                 // generateArticlesIndex
             ),
             generateContactPage,
-            minifyCss,
-            // minifyJs,
-            minifyImg,
+            copyAssets,
+            gulp.parallel(
+                minifyCss,
+                // minifyJs,
+                minifyImg,
+            )
         ),
-        gulp.parallel(minifyHtml, generateSitemap),
+        gulp.parallel(
+            minifyHtml,
+            generateSitemap
+        ),
     )
 );
+
+const watchFiles = () => {
+    gulp.watch(
+        ["./src/**/*.*"],
+        { ignoreInitial: false },
+        gulp.series(
+            gulp.parallel(
+                gulp.series(
+                    generateHtmlArticles,
+                    regenerateHistory,
+                    populateHomePage,
+                    // generateArticlesIndex
+                ),
+                generateContactPage,
+                gulp.parallel(
+                    copyAssets,
+                    generateSitemap,
+                )
+            ),
+            browserSyncReload
+        )
+    );
+};
 
 gulp.task("watch", gulp.parallel(watchFiles, browserSync));
