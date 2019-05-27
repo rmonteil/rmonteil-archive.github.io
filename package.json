@@ -21,7 +21,7 @@
     "gulp-replace": "^1.0.0",
     "gulp-sitemap": "^6.1.0",
     "gulp-uglify": "^3.0.1",
-    "highlight.js": "^9.13.1",
+    "highlight.js": "^9.15.6",
     "markdown-it": "^8.4.2",
     "through2": "^3.0.0"
   },
