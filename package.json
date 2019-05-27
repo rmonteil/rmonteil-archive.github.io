@@ -23,7 +23,7 @@
     "gulp-uglify": "^3.0.1",
     "highlight.js": "^9.13.1",
     "markdown-it": "^8.4.2",
-    "through2": "^3.0.0"
+    "through2": "^3.0.1"
   },
   "dependencies": {
     "md5-file": "^4.0.0"
